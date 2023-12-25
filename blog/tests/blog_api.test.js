@@ -1,9 +1,11 @@
 const mongoose = require('mongoose')
+const Blog = require('../models/blog')
+const { blogs } = require('./dummy_data')
+const helper = require('./test_helper')
+const { request } = require('./set_header')
 const supertest = require('supertest')
 const app = require('../app')
 const api = supertest(app)
-const Blog = require('../models/blog')
-const { blogs } = require('./dummy_data')
 
 
 beforeEach(async () => {
@@ -12,34 +14,34 @@ beforeEach(async () => {
 })
 
 test('blogs are returned as json', async () => {
-    await api
-        .get('/api/blogs')
+    request.get('/api/blogs')
         .expect(200)
         .expect('Content-Type', /application\/json/)
 }, 10000)
 
 
 test('all blogs are returned', async () => {
-    const response = await api.get('/api/blogs')
-    expect(response.body).toHaveLength(blogs.length)
+    request.get('/api/blogs')
+        .expect(resp =>
+            expect(resp.body).toHaveLength(blogs.length))
 }, 10000)
 
 test('id is defined', async () => {
-    const response = await api.get('/api/blogs')
-    expect(response.body[0].id).toBeDefined()
+    request.get('/api/blogs')
+        .expect(resp =>
+            expect(resp.body[0].id).toBeDefined()
+        )
 }
 )
 
 test('a valid blog can be added', async () => {
     await Blog.deleteMany({})
-    const newBlog = {
-        title: 'test title',
-        author: 'test author',
-        url: 'test url',
-        likes: 1
+    let user = {
+        username: '',
+        name: '',
     }
-    await api
-        .post('/api/blogs')
+    const newBlog = await helper.createBlog(user)
+    request.post('/api/blogs')
         .send(newBlog)
         .expect(201)
         .expect('Content-Type', /application\/json/)
@@ -48,7 +50,15 @@ test('a valid blog can be added', async () => {
             expect(res.body.author).toBe(newBlog.author)
             expect(res.body.url).toBe(newBlog.url)
             expect(res.body.likes).toBe(newBlog.likes)
+            expect(res.body.user).toBeDefined()
         })
+    request.get('/api/blogs')
+        .expect(res => {
+            expect(res.body).toHaveLength(1)
+            expect(res.body[0].user.username).toBe(user.username)
+            expect(res.body[0].user.name).toBe(user.name)
+        })
+
 }
 )
 
@@ -59,8 +69,7 @@ test('likes defaults to 0', async () => {
         author: 'test author',
         url: 'test url'
     }
-    await api
-        .post('/api/blogs')
+    request.post('/api/blogs')
         .send(newBlog)
         .expect(201)
         .expect('Content-Type', /application\/json/)
@@ -77,8 +86,7 @@ test('title is required', async () => {
         url: 'test url',
         likes: 1
     }
-    await api
-        .post('/api/blogs')
+    request.post('/api/blogs')
         .send(newBlog)
         .expect(400)
 }
@@ -87,21 +95,18 @@ test('title is required', async () => {
 test('delete a blog returns 204', async () => {
     const blogs = await Blog.find({})
     const blogToDelete = blogs[0]
-    await api
-        .delete(`/api/blogs/${blogToDelete.id}`)
+    request.delete(`/api/blogs/${blogToDelete.id}`)
         .expect(204)
-    await api
-        .get('/api/blogs')
+    request.get('/api/blogs')
         .expect(res => {
             expect(res.body).toHaveLength(blogs.length - 1)
         })
 }
 )
 
-test('delete a blog that does not exist returns 404', async () => {
-    await api
-        .delete('/api/blogs/1234567890')
-        .expect(404)
+test('delete a blog that does not exist returns 400', async () => {
+    request.delete(`/api/blogs/123456789`)
+        .expect(400)
 }
 )
 
@@ -114,8 +119,7 @@ test('update a blog', async () => {
         url: 'updated url',
         likes: 1
     }
-    await api
-        .put(`/api/blogs/${blogToUpdate.id}`)
+    request.put(`/api/blogs/${blogToUpdate.id}`)
         .send(updatedBlog)
         .expect(200)
         .expect(res => {
@@ -126,9 +130,6 @@ test('update a blog', async () => {
         })
 }
 )
-
-
-
 
 
 afterAll(() => {
